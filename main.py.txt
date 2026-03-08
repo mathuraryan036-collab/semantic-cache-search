@@ -1,0 +1,66 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from .vector_store import VectorStore
+from .cache import SemanticCache
+from .clustering import FuzzyCluster
+from .embedder import Embedder
+
+app = FastAPI()
+
+vector_store = VectorStore()
+embedder = Embedder()
+cache = SemanticCache()
+
+cluster = FuzzyCluster(vector_store.embeddings)
+
+class Query(BaseModel):
+    query: str
+
+
+@app.post("/query")
+def query(q: Query):
+
+    query_vec = embedder.embed([q.query])[0]
+
+    hit, item, score = cache.lookup(query_vec)
+
+    if hit:
+        return {
+            "query": q.query,
+            "cache_hit": True,
+            "matched_query": item["query"],
+            "similarity_score": float(score),
+            "result": item["result"],
+            "dominant_cluster": int(item["cluster"])
+        }
+
+    results, sims = vector_store.search(query_vec)
+
+    result = results[0]
+
+    cluster_dist = cluster.get_cluster_distribution(query_vec)
+
+    dominant_cluster = cluster_dist.argmax()
+
+    cache.store(q.query, query_vec, result, int(dominant_cluster))
+
+    return {
+        "query": q.query,
+        "cache_hit": False,
+        "matched_query": None,
+        "similarity_score": float(sims[0]),
+        "result": result,
+        "dominant_cluster": int(dominant_cluster)
+    }
+
+
+@app.get("/cache/stats")
+def stats():
+    return cache.stats()
+
+
+@app.delete("/cache")
+def clear():
+    cache.clear()
+    return {"message":"cache cleared"}

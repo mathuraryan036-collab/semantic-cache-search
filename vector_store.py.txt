@@ -1,0 +1,25 @@
+import numpy as np
+from sklearn.datasets import fetch_20newsgroups
+from .embedder import Embedder
+
+class VectorStore:
+
+    def __init__(self):
+        self.embedder = Embedder()
+
+        dataset = fetch_20newsgroups(remove=("headers","footers","quotes"))
+        self.documents = dataset.data[:5000]
+
+        self.embeddings = self.embedder.embed(self.documents)
+
+    def search(self, query_embedding, top_k=3):
+
+        sims = np.dot(self.embeddings, query_embedding) / (
+            np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(query_embedding)
+        )
+
+        idx = np.argsort(sims)[-top_k:][::-1]
+
+        results = [self.documents[i] for i in idx]
+
+        return results, sims[idx]

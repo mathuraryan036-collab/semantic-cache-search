@@ -1,0 +1,28 @@
+import numpy as np
+import skfuzzy as fuzz
+
+class FuzzyCluster:
+
+    def __init__(self, embeddings, clusters=10):
+
+        self.embeddings = embeddings.T
+
+        self.cntr, self.u, _, _, _, _, _ = fuzz.cluster.cmeans(
+            self.embeddings,
+            clusters,
+            2,
+            error=0.005,
+            maxiter=1000
+        )
+
+    def get_cluster_distribution(self, vector):
+
+        vector = vector.reshape(-1,1)
+
+        dist = np.linalg.norm(self.cntr - vector.T, axis=1)
+
+        membership = 1 / dist
+
+        membership = membership / np.sum(membership)
+
+        return membership
